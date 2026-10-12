@@ -248,15 +248,29 @@ const formatQty = item => { const u = qtyUnitOf(item); return u === "pcs" ? item
 /* "140x12" -> "140 x 12", "Tube 40x40x3" -> "Tube 40 x 40 x 3" */
 const spaceDimensions = s => String(s).replace(/(\d)\s*[xX]\s*(?=\d)/g, "$1 x ");
 
+/* Заметка для отчёта: слово SHIM убирается (оно нужно только для отнесения позиции к L) */
+const reportNote = item => String(item.notes || "")
+    .replace(/\bshim\b/gi, "")
+    .split(/\s*[,;]\s*/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join(", ");
+
 function getBOMDescription(item) {
+    const note = reportNote(item);
+
+    /* Fastener / Non-Steel: заметка — часть названия, без скобок */
     if (isAccessory(item)) {
-        return spaceDimensions([item.section, item.notes, item.width ? `(W: ${item.width} mm)` : ""].filter(Boolean).join(" "));
+        return spaceDimensions([item.section, note, item.width ? `(W: ${item.width} mm)` : ""].filter(Boolean).join(" "));
     }
+
+    /* Plate / Profile: заметка в скобках */
+    let base = item.section;
     if (item.itemType === "Plate") {
         const t = String(item.section).match(/[\d.]+/)?.[0];
-        return spaceDimensions(item.width && t ? `${item.width}x${t} THK PLT` : item.section);
+        if (item.width && t) base = `${item.width}x${t} THK PLT`;
     }
-    return spaceDimensions(item.section);
+    return spaceDimensions(base) + (note ? ` (${note})` : "");
 }
 
 /* ===== ADD / EDIT / DELETE ITEMS ===== */
@@ -1099,7 +1113,7 @@ function writeBOMBlock(ws, row, col, items) {
         if (id !== prevId) { closeRun(row - 1); runStart = row; prevId = id; }
 
         const w = getWeight(item);
-        const desc = getBOMDescription(item) + (item.itemType === "Plate" && isShaped(item) ? " (SHAPED)" : "");
+        const desc = getBOMDescription(item);
         const values = [id, formatQty(item), desc, item.length ?? "-", item.grade || "-", w > 0 ? Number(w.toFixed(3)) : "-"];
 
         values.forEach((v, i) => {
