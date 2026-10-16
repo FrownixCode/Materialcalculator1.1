@@ -172,11 +172,32 @@ function handleItemTypeChange(typeId, sectionId, widthGroupId) {
     if (grades.includes(current)) $(gradeId).value = current;
 
     setNoteHints(typeId, sectionId);
+
+    if (isEdit) applyMaterialDefaults("editItemType", "editThickness", "editLength", "editNotes", false);
+    else applyMaterialDefaults("itemType", "thickness", "length", "notes", true);
 }
 
 function refreshSelects() {
     handleItemTypeChange("itemType", "thickness", "widthGroup");
     handleItemTypeChange("editItemType", "editThickness", "editWidthGroup");
+}
+
+/* Материал с noLength: поле длины блокируется (NOT REQUIRED). defaultNote подставляется в Notes красным */
+function applyMaterialDefaults(typeId, sectionId, lengthId, notesId, fill) {
+    const m = findMaterial($(typeId).value, $(sectionId).value);
+    const len = $(lengthId), notes = $(notesId);
+
+    const noLen = !!m?.noLength;
+    len.disabled = noLen;
+    len.classList.toggle("not-required", noLen);
+    len.placeholder = noLen ? "NOT REQUIRED" : "";
+    if (noLen) len.value = "";
+
+    if (fill) {
+        const note = m?.defaultNote || "";
+        notes.value = note;
+        notes.classList.toggle("auto-red", !!note);
+    }
 }
 
 /* ===== WEIGHTS / GROUPING ===== */
@@ -282,12 +303,13 @@ function readItemForm(ids) {
     for (const k in ids) v[k] = $(ids[k]).value.trim();
     const length = Number(v.length), width = Number(v.width), qty = Number(v.qty);
     const plate = v.itemType === "Plate", other = v.itemType === "Other";
+    const noLen = other || !!findMaterial(v.itemType, v.section)?.noLength;
 
     const error =
         !v.idNumber ? "Please enter ID Number." :
         !v.section ? "No materials of this type in the database. Load them via Advanced -> Material Database -> Import settings." :
-        !other && !(length > 0) ? "Please enter a valid length." :
-        other && v.length !== "" && !(length > 0) ? "Please enter a valid length." :
+        !noLen && !(length > 0) ? "Please enter a valid length." :
+        noLen && v.length !== "" && !(length > 0) ? "Please enter a valid length." :
         !(qty > 0) ? "Please enter a valid quantity." :
         plate && !(width > 0) ? "Please enter a valid width for Plate." :
         other && v.width !== "" && !(width > 0) ? "Please enter a valid width." : "";
@@ -295,10 +317,10 @@ function readItemForm(ids) {
 
     return {
         ...v,
-        length: other && v.length === "" ? null : length,
+        length: noLen && v.length === "" ? null : length,
         qty,
         width: plate || (other && v.width !== "") ? width : null,
-        calculatedWeight: calculateCalculatedWeight(v.itemType, v.section, other ? 0 : length, width, qty)
+        calculatedWeight: calculateCalculatedWeight(v.itemType, v.section, noLen ? 0 : length, width, qty)
     };
 }
 
@@ -311,7 +333,7 @@ function addMaterial() {
     $("length").value = "";
     $("width").value = "";
     $("qty").value = "1";
-    $("notes").value = "";
+    applyMaterialDefaults("itemType", "thickness", "length", "notes", true);
 }
 
 function deleteMaterial(id) {
@@ -336,6 +358,7 @@ function editMaterial(id) {
     $("editWidth").value = item.width ?? "";
     $("editQty").value = item.qty ?? 1;
     $("editNotes").value = item.notes || "";
+    applyMaterialDefaults("editItemType", "editThickness", "editLength", "editNotes", false);
     $("editManualWeight").value = item.isManualOverride ? item.manualWeight : "";
     $("editModal").style.display = "flex";
 }
@@ -528,6 +551,9 @@ function showDatabaseModal(m, type = "Profile") {
     $("databaseBulkBox").style.display = m ? "none" : "block";
     $("databaseQtyUnitGroup").style.display = t === "Other" ? "" : "none";
     $("databaseQtyUnit").value = m?.qtyUnit || "pcs";
+    $("databaseNoLengthGroup").style.display = t === "Fastener" ? "" : "none";
+    $("databaseNoLength").checked = !!m?.noLength;
+    $("databaseDefaultNote").value = m?.defaultNote || "";
     updateDatabaseUnit();
     $("materialDatabaseModal").style.display = "flex";
 }
@@ -537,17 +563,18 @@ function editDatabaseMaterial(id) {
     if (m) showDatabaseModal(m);
 }
 
-function upsertMaterial(type, name, weight, qtyUnit) {
+function upsertMaterial(type, name, weight, qtyUnit, extras = {}) {
     name = cleanName(name);
     const m = materialsDatabase.find(x => x.type === type && x.name.toLowerCase() === name.toLowerCase());
     if (m) {
         if (weight !== null) m.weight = weight;
         if (qtyUnit) m.qtyUnit = qtyUnit;
+        Object.assign(m, extras);
         return "updated";
     }
     materialsDatabase.push({
         id: "CUSTOM_" + newId(),
-        type, name, ...(qtyUnit ? { qtyUnit } : {}),
+        type, name, ...(qtyUnit ? { qtyUnit } : {}), ...extras,
         weight: weight ?? (type === "Plate" ? 7850 : 0)
     });
     return "added";
@@ -594,9 +621,13 @@ function saveMaterialDatabaseItem() {
         if (!name) return alert("Please enter material name.");
         if (weight === null ? type === "Profile" : !(weight >= 0)) return alert("Please enter a valid weight.");
 
+        const extras = {
+            noLength: type === "Fastener" && $("databaseNoLength").checked,
+            defaultNote: $("databaseDefaultNote").value.trim()
+        };
         const existing = editingDatabaseId && materialsDatabase.find(m => sameId(m.id, editingDatabaseId));
-        if (existing) Object.assign(existing, { name, weight: weight ?? existing.weight, ...(qtyUnit ? { qtyUnit } : {}) });
-        else upsertMaterial(type, name, weight, qtyUnit);
+        if (existing) Object.assign(existing, { name, weight: weight ?? existing.weight, ...(qtyUnit ? { qtyUnit } : {}), ...extras });
+        else upsertMaterial(type, name, weight, qtyUnit, extras);
     }
 
     saveDatabase();
@@ -656,7 +687,8 @@ function importSettings(input) {
             data.materials.forEach(m => {
                 if (!UNITS[m.type] || !m.name) return;
                 const w = Number(m.weight);
-                upsertMaterial(m.type, String(m.name), Number.isFinite(w) ? w : null, m.qtyUnit) === "added" ? added++ : updated++;
+                upsertMaterial(m.type, String(m.name), Number.isFinite(w) ? w : null, m.qtyUnit,
+                    { ...(m.noLength ? { noLength: true } : {}), ...(m.defaultNote ? { defaultNote: m.defaultNote } : {}) }) === "added" ? added++ : updated++;
             });
             saveDatabase();
             recalcAllWeights();
@@ -1326,6 +1358,11 @@ function startApplication() {
         $(n).addEventListener("focus", () => setNoteHints(t, s));
         $(s).addEventListener("change", () => setNoteHints(t, s));
     });
+
+    /* блокировка длины и заметка по умолчанию при выборе материала */
+    $("thickness").addEventListener("change", () => applyMaterialDefaults("itemType", "thickness", "length", "notes", true));
+    $("editThickness").addEventListener("change", () => applyMaterialDefaults("editItemType", "editThickness", "editLength", "editNotes", false));
+    $("notes").addEventListener("input", e => e.target.classList.remove("auto-red"));
 
     fixFormFields();
     new MutationObserver(list => {
