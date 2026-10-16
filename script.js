@@ -182,7 +182,7 @@ function refreshSelects() {
     handleItemTypeChange("editItemType", "editThickness", "editWidthGroup");
 }
 
-/* Материал с noLength: поле длины блокируется (NOT REQUIRED). defaultNote подставляется в Notes красным */
+/* Материал с noLength: поле длины блокируется (серое, без надписи). defaultNote подставляется в Notes красным */
 function applyMaterialDefaults(typeId, sectionId, lengthId, notesId, fill) {
     const m = findMaterial($(typeId).value, $(sectionId).value);
     const len = $(lengthId), notes = $(notesId);
@@ -190,7 +190,7 @@ function applyMaterialDefaults(typeId, sectionId, lengthId, notesId, fill) {
     const noLen = !!m?.noLength;
     len.disabled = noLen;
     len.classList.toggle("not-required", noLen);
-    len.placeholder = noLen ? "NOT REQUIRED" : "";
+    len.placeholder = "";
     if (noLen) len.value = "";
 
     if (fill) {
