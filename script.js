@@ -1,3 +1,4 @@
+document.title = "Universal Metal Calculator (MTO / BOM) v7";
 /* UNIVERSAL METAL CALCULATOR — MTO + Excel BOM export */
 
 /* ===== CONSTANTS ===== */
@@ -279,20 +280,22 @@ const reportNote = item => String(item.notes || "")
 
 function getBOMDescription(item) {
     const note = reportNote(item);
+    const width = Number(item.width) || 0;
 
     /* Fastener / Non-Steel: заметка — часть названия, без скобок */
     if (isAccessory(item)) {
-        /* материал с толщиной в названии (например "3 THK NEOPRENE") + ширина -> "80x3 THK NEOPRENE" */
-        const hasThk = item.itemType === "Other" && /^[\d.]+\s*THK\b/i.test(item.section);
-        const name = item.width && hasThk ? `${item.width}x${item.section}` : item.section;
-        const widthTag = item.width && !hasThk ? `(W: ${item.width} mm)` : "";
+        /* название вида "3 THK NEOPRENE" + ширина -> "50 x 3 THK NEOPRENE" */
+        const hasThk = /^\s*[\d.]+\s*THK\b/i.test(String(item.section));
+        const name = width && hasThk ? `${width}x${item.section}` : item.section;
+        const widthTag = width && !hasThk ? `(W: ${width} mm)` : "";
         return spaceDimensions([name, note, widthTag].filter(Boolean).join(" "));
     }
+
     /* Plate / Profile: заметка в скобках */
     let base = item.section;
     if (item.itemType === "Plate") {
         const t = String(item.section).match(/[\d.]+/)?.[0];
-        if (item.width && t) base = `${item.width}x${t} THK PLT`;
+        if (width && t) base = `${width}x${t} THK PLT`;
     }
     return spaceDimensions(base) + (note ? ` (${note})` : "");
 }
