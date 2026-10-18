@@ -282,9 +282,12 @@ function getBOMDescription(item) {
 
     /* Fastener / Non-Steel: заметка — часть названия, без скобок */
     if (isAccessory(item)) {
-        return spaceDimensions([item.section, note, item.width ? `(W: ${item.width} mm)` : ""].filter(Boolean).join(" "));
+        /* материал с толщиной в названии (например "3 THK NEOPRENE") + ширина -> "80x3 THK NEOPRENE" */
+        const hasThk = item.itemType === "Other" && /^[\d.]+\s*THK\b/i.test(item.section);
+        const name = item.width && hasThk ? `${item.width}x${item.section}` : item.section;
+        const widthTag = item.width && !hasThk ? `(W: ${item.width} mm)` : "";
+        return spaceDimensions([name, note, widthTag].filter(Boolean).join(" "));
     }
-
     /* Plate / Profile: заметка в скобках */
     let base = item.section;
     if (item.itemType === "Plate") {
