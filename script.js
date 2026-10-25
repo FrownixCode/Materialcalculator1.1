@@ -653,6 +653,31 @@ function deleteDatabaseMaterial(id) {
     renderEverything();
 }
 
+/* Удаляет ВСЕ материалы из базы (с предупреждением). Грейды, список позиций MTO и шаблон отчёта не затрагиваются */
+function deleteAllMaterials() {
+    if (!isAdministrator) return alert("Administrator access is required.");
+    if (!materialsDatabase.length) return alert("The material database is already empty.");
+
+    const n = materialsDatabase.length;
+
+    if (!confirm(
+        `WARNING!\n\nYou are about to delete ALL ${n} material(s) from the database.\n\n` +
+        `This cannot be undone. Tip: click "Export settings" first to save a backup.\n\nContinue?`
+    )) return;
+
+    if (!confirm(`Are you absolutely sure? ${n} material(s) will be permanently deleted.`)) return;
+
+    materialsDatabase = [];
+
+    /* заметки Non-Steel привязаны к материалам, поэтому удаляются вместе с ними */
+    Object.keys(noteList).forEach(k => { if (k.startsWith("Other::")) delete noteList[k]; });
+
+    saveDatabase();
+    saveNotes();
+    refreshSelects();
+    renderEverything();
+}
+
 function closeMaterialDatabaseModal() {
     $("materialDatabaseModal").style.display = "none";
     editingDatabaseId = null;

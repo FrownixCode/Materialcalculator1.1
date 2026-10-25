@@ -155,7 +155,10 @@ th { background: #f8fafc; color: #475569; font-weight: 600; text-align: center; 
     <h3>Grades</h3>
     <div id="gradesBox" class="orange-box"></div>
 
-    <h3>Materials</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <h3 style="margin:0">Materials</h3>
+    <button class="delete-btn" style="margin:0" onclick="deleteAllMaterials()">Delete all</button>
+    </div>
     <table>
         <thead><tr><th>Type</th><th>Name</th><th>Weight / Unit</th><th>Unit</th><th>Actions</th></tr></thead>
         <tbody id="materialDatabaseBody"></tbody>
